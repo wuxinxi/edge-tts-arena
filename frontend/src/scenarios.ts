@@ -1,4 +1,5 @@
 import type { ModelOptions } from './types'
+import { englishExample } from './textCompatibility'
 
 export interface Scenario {
   key: string
@@ -9,6 +10,8 @@ export interface Scenario {
   candidates: Record<string, string>
   preset?: string
   modelPresets?: Record<string, string>
+  modelTexts?: Record<string, string>
+  modelVoices?: Record<string, string>
   options?: ModelOptions
 }
 
@@ -24,7 +27,18 @@ export const scenarios: Scenario[] = [
       'kokoro-82m': '预置音色可直接朗读，适合先考察小模型的发音与资源占用。',
       'melotts-zh': '当前中文权重无需参考音频，可测试中文提示与中英词语衔接。',
       'qwen3-tts-1.7b': 'CustomVoice 提供预置音色，可对比同一段提示的声音与表达方式。',
-      'parler-tts-mini': '提供英文描述式生成；当前缺少权重，只展示能力资料。',
+    },
+  },
+  {
+    key: 'english', label: '英文朗读与声音描述',
+    question: '英文内容需要现成音色，还是通过描述控制声音特征？',
+    text: englishExample,
+    modelVoices: { 'kokoro-82m': 'af_heart', 'qwen3-tts-1.7b': 'ryan' },
+    checks: ['英文正文是否完整，专有名词是否读对', '改变声音描述后，节奏与音色是否有变化', '同一设备上的耗时与内存是否可接受'],
+    candidates: {
+      'kokoro-82m': '选择本地英文音色，考察小模型朗读与资源占用。',
+      'qwen3-tts-1.7b': '选择预置音色并使用表达指令；英文建议采用对应母语音色。',
+      'parler-tts-mini': '英文描述控制声音特征、语速与录音感，也可指定命名说话人；无需参考音频。',
     },
   },
   {
@@ -74,10 +88,11 @@ export const scenarios: Scenario[] = [
     text: '终于等到你了！这个好消息，我一直想亲口告诉你。',
     checks: ['指令是否产生可听见的变化', '情绪变化是否影响内容准确性', '同一音色能否保留一致性'],
     preset: 'warm',
+    modelTexts: { 'parler-tts-mini': 'You are finally here! I have been waiting to share this wonderful news with you.' },
     candidates: {
       'cosyvoice3': '提供自然语言风格和方言指令，需结合参考声音试听。',
       'qwen3-tts-1.7b': 'CustomVoice 支持对预置音色施加表达指令。',
-      'parler-tts-mini': '通过英文描述控制声音特征；本机尚未就绪。',
+      'parler-tts-mini': '通过英文描述控制声音特征；单独探索使用英文示例，中文统一评测不包含它。',
     },
   },
   {
@@ -94,6 +109,7 @@ export const scenarios: Scenario[] = [
 
 export interface ScenarioExperiment {
   modelKey: string
+  voice?: string
   text: string
   preset: string
   options: ModelOptions

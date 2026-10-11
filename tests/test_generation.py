@@ -138,7 +138,7 @@ class GenerationRegressionTests(unittest.TestCase):
                 adapter = AdapterFactory.get_adapter(key)
                 with self.subTest(model=key), patch.object(adapter, 'is_available', return_value=True), \
                         patch.object(adapter, 'runtime_python', return_value=python):
-                    result = adapter.generate(text='测试', speed=1.2, ref_audio_path='/tmp/reference.wav', ref_text='参考')
+                    result = adapter.generate(text='Hello.' if key == 'parler-tts-mini' else '测试', speed=1.2, ref_audio_path='/tmp/reference.wav', ref_text='参考')
                     self.assertTrue(result['success'])
                     self.assertEqual(result['device'], 'cpu')
                     command = calls[-1]

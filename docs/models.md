@@ -4,6 +4,25 @@
 
 平台使用 `.venv/` 提供 API、下载与指标采集，使用 `.venvs/<环境名>/` 执行各模型真实推理。模型权重默认位于 `checkpoints/<模型 key>/`，部分模型还依赖固定版本的 `third_party/` 源码和辅助资源。
 
+## 跨机器 Python 环境
+
+系统 Python 与项目解释器分别管理。M1 Pro 默认使用 3.12、Mac mini M4 默认使用 3.13，不要求改动系统版本；项目的已验证配置为平台 3.12，模型环境按下表分别使用 3.12 或 3.11。
+
+新建平台环境时，`.python-version` 与 `setup_env.sh` 都明确选择 3.12。初始化脚本只查找已有解释器，缺少时停止；用户可手动准备：
+
+```bash
+# 仅需在缺少 Python 3.12 时执行，会下载解释器
+uv python install 3.12
+./scripts/setup_env.sh
+
+# 查看实际平台解释器，不以系统 python3 --version 为准
+./.venv/bin/python --version
+```
+
+模型准备脚本另行指定模型所需的 Python 版本，缺少时 uv 可下载对应解释器；准备模型和辅助资源仍需用户主动运行。uv 支持并存多个 Python 版本，见[官方说明](https://docs.astral.sh/uv/concepts/python-versions/)。
+
+已有 `.venv` 会保留，非 3.12 时显示提示；现有模型环境也不会自动换版本。需要切换时，先停止服务，将旧环境移到独立备份位置，再重新创建并安装依赖。不同机器应重新创建环境，不复制 `.venv/`、`.venvs/`。当前未完整验证 Python 3.13 下的模型依赖，也未完成 M4 横评。
+
 ## 准备独立环境
 
 已有环境不必重新创建。以下是手动安装示例，执行时会访问包源；基础环境的初始化见 [README](../README.md#快速启动)。
@@ -11,6 +30,9 @@
 ### 使用准备脚本
 
 ```bash
+# 准备全部 9 个环境（覆盖 10 款模型，不下载主权重）
+./.venv/bin/python scripts/setup_models.py --all
+
 # 只准备所需环境
 ./.venv/bin/python scripts/setup_models.py --models kokoro
 ./.venv/bin/python scripts/setup_models.py --models melotts,qwen3
@@ -27,8 +49,10 @@
 | `fish-speech` | 3.11 | `fish-speech-1.5` | Fish-Speech 固定版本源码、语音编码器 |
 | `maskgct` | 3.11 | `maskgct` | Amphion 源码、W2V-BERT、文本与语音资源 |
 | `parler` | 3.12 | `parler-tts-mini` | 英文模型权重与 tokenizer |
+| `chattts` | 3.12 | `chattts` | ChatTTS 包与本地权重 |
+| `f5tts` | 3.12 | `f5-tts` | F5-TTS 包、Vocos 与 FFmpeg |
 
-不带 `--models` 会准备表中全部环境。默认流程会拉取所需源码、安装依赖，并下载需要的辅助资源；它不会替代 `download.sh` 的主权重下载。
+`--all` 准备表中全部环境；为兼容原用法，不带选择参数也执行全部准备。`--all` 与 `--models` 不能同时使用。默认流程会拉取所需源码、安装依赖，并下载需要的辅助资源；它不会替代 `download.sh` 的主权重下载。
 
 ```bash
 # 环境与源码已经准备好时，只补辅助资源
@@ -39,14 +63,10 @@
 
 ### ChatTTS 与 F5-TTS
 
-这两个环境不在 `setup_models.py` 的环境表中，需单独准备：
+这两个环境已纳入 `--all`，也可单独准备：
 
 ```bash
-uv venv --python 3.12 .venvs/chattts
-uv pip install --python .venvs/chattts/bin/python 'chattts==0.2.5' soundfile
-
-uv venv --python 3.12 .venvs/f5tts
-uv pip install --python .venvs/f5tts/bin/python 'f5-tts==1.1.22' soundfile
+./.venv/bin/python scripts/setup_models.py --models chattts,f5tts
 ```
 
 F5-TTS 的参考音频预处理还需系统可用的 FFmpeg。包安装完成不代表全部源码、权重与辅助资源均已就绪，以页面状态检查和实际生成验证为准。
@@ -90,7 +110,7 @@ F5-TTS 还需要 `checkpoints/f5-tts/vocoder/config.yaml` 与 `pytorch_model.bin
 | Qwen3 1.7B CustomVoice | MPS / bfloat16 | MPS 路径要求 macOS 14 或以上，否则回退 CPU / float32 |
 | Fish-Speech 1.5 | MPS + CPU 编码器 | MPS 时语音编码器使用 CPU |
 | MaskGCT | CPU | 当前入口不自动选 MPS |
-| Parler-TTS Mini | MPS 可用时使用 MPS，否则 CPU | 本机尚缺主权重，未生成验证 |
+| Parler-TTS Mini | MPS 可用时使用 MPS，否则 CPU | 2026-10-11 已用现有权重在 MPS / float32 上完成英文生成验证 |
 
 多数自动设备入口在 CUDA 可用时优先选 CUDA；具体分支见 [workers](../backend/app/workers/)。设备名、精度、源码版本与实际配置应与评测结果一起保存，不能只写一个模型名称。
 
@@ -117,3 +137,11 @@ F5-TTS 还需要 `checkpoints/f5-tts/vocoder/config.yaml` 与 `pytorch_model.bin
 接入后分别验证资源就绪、实际生成、参数记录与失败原因；对语音内容和场景效果做人工试听。不能用系统 TTS 或模拟等待替代目标模型推理。
 
 官方模型与源码链接见项目能力资料；权重、代码和辅助资源许可需要按实际版本分别核对。
+
+## Parler Mini v1 的声音描述
+
+当前版本只支持英文正文，以英文描述控制声音特征、语速、音高和录音感；不提供上传参考音频克隆。官方模型卡列出 34 个命名说话人，界面提供其中 Jon、Lea、Gary、Jenna、Mike、Laura 六个官方示例名称的快捷选项。选择名称后会加入声音描述前缀；默认选项直接使用描述，其他官方名称也可在描述中自行指定。[官方模型卡](https://huggingface.co/parler-tts/parler-tts-mini-v1)
+
+提供清晰英文、温暖讲述、平稳播报、活泼表达四个探索预设，可自行修改描述与随机种子。预设是探索起点，效果需试听。记录保留实际描述、说话人、种子、精度与设备；英文场景示例为 Kokoro、Qwen CustomVoice 选择对应英文音色，统一评测仍使用默认音色并保存配置。
+
+2026-10-11 使用本地资源完成默认英文与 Jon＋温暖讲述两次生成验证，后者产出约 4.85 秒音频；尚未进行全面人工听评。输入中文等不支持的文字时会在加载模型前报错，不翻译正文；界面提前提示。不同拉丁文字语言不能仅凭字符检查判定为英文，使用者仍应提供英文。

@@ -183,6 +183,8 @@
           ></textarea>
         </div>
 
+        <p v-if="activeTab === 'single' && currentModelKey === 'parler-tts-mini'" class="text-xs text-slate-400">Mini v1 仅支持英文正文；声音描述也请用英文。<button @click="applyPreset(englishExample)" :disabled="isGenerating" class="ml-2 text-indigo-300 hover:underline">使用英文示例</button></p>
+        <p v-if="activeTab === 'single' && singleTextError" role="alert" class="text-xs text-amber-300">{{ singleTextError }}</p>
         <!-- 单模型参数控制 -->
         <div v-if="activeTab === 'single'" class="flex flex-wrap items-center justify-between gap-4 pt-2">
           <div class="flex items-center gap-4">
@@ -210,7 +212,7 @@
             <button
               v-if="activeTab === 'single'"
               @click="runSingle"
-              :disabled="isGenerating || !currentModel?.is_ready || !inputText.trim()"
+              :disabled="isGenerating || !currentModel?.is_ready || !inputText.trim() || !!singleTextError"
               class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Loader2 v-if="isGenerating" :size="16" class="animate-spin" /><Play v-else :size="16" />
@@ -222,6 +224,7 @@
 
       <EvaluationPlan v-if="activeTab === 'battle' && evaluationTextMode === 'suite'" v-model:selected-ids="evaluationIds" v-model:repeats="evaluationRepeats" :model-count="selectedBattleKeys.length" :busy="isGenerating" :saved-samples="restoredSamples" @update:selected-ids="restoredSamples = null" />
       <p v-if="activeTab === 'battle' && restoredSamples && evaluationTextMode === 'suite'" class="text-xs text-teal-200">使用历史批次保存的测试文本；重新勾选可改用当前测试集。</p>
+      <p v-if="activeTab === 'battle' && battleTextError" role="alert" class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300">{{ battleTextError }} 场景测试集中可单选「英文提示」。</p>
       <div v-if="activeTab === 'battle'" class="space-y-5">
       <div class="glass-panel p-5 rounded-2xl space-y-4 text-xs">
         <h2 class="section-title text-sm"><SlidersHorizontal :size="17" /> 3. 检查评测条件</h2>
@@ -257,7 +260,7 @@
       </details>
         <div class="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-5 flex flex-wrap items-center justify-between gap-4">
           <div><p class="text-sm font-medium text-indigo-100">{{ selectedBattleKeys.length }} 款模型 · {{ plannedSamples.length || (evaluationTextMode === 'custom' ? 1 : 0) }} 段文本 · 每段 {{ evaluationRepeats }} 次</p><p class="mt-1 text-xs text-slate-400">共 {{ plannedGenerations }} 次生成 · {{ benchmarkMode === 'uniform' ? '统一条件' : '推荐配置' }}<span v-if="!hasEvaluationText"> · 请先选择或填写测试文本</span></p></div>
-          <button @click="runBattle" :disabled="isGenerating || !selectedBattleKeys.length || !hasEvaluationText" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"><Loader2 v-if="isGenerating" :size="16" class="animate-spin" /><Play v-else :size="16" />开始评测 ({{ plannedGenerations }} 次生成)</button>
+          <button @click="runBattle" :disabled="isGenerating || !selectedBattleKeys.length || !hasEvaluationText || !!battleTextError" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"><Loader2 v-if="isGenerating" :size="16" class="animate-spin" /><Play v-else :size="16" />开始评测 ({{ plannedGenerations }} 次生成)</button>
         </div>
       </div>
       </div>
@@ -416,6 +419,7 @@ import EvaluationPlan from './EvaluationPlan.vue'
 import ComparisonHistory from './ComparisonHistory.vue'
 import RunHistory from './RunHistory.vue'
 import { evaluationSamples } from './evaluationSamples'
+import { englishExample, textCompatibilityError } from './textCompatibility'
 import BatchProgress from './BatchProgress.vue'
 import ListeningReview from './ListeningReview.vue'
 import { reviewDrafts, pendingReviewDrafts, warnBeforeLeaving } from './listeningReviewDrafts'
@@ -494,6 +498,9 @@ const nowPlayingUrl = ref('')
 const globalAudio = ref<HTMLAudioElement | null>(null)
 
 const currentModel = computed(() => models.value.find(m => m.key === currentModelKey.value))
+const singleTextError = computed(() => textCompatibilityError([currentModelKey.value], [inputText.value]))
+const battleTextError = computed(() => textCompatibilityError(selectedBattleKeys.value,
+  evaluationTextMode.value === 'suite' ? plannedSamples.value.map(sample => sample.text) : [inputText.value]))
 const battleReferenceModels = computed(() => models.value.filter(model =>
   selectedBattleKeys.value.includes(model.key) && model.requires_reference_audio))
 const requiresRefText = computed(() => !modelOptions.value.x_vector_only && modelOptions.value.mode !== 'cross_lingual')
@@ -522,7 +529,7 @@ async function exploreScenario(experiment: ScenarioExperiment) {
   activeTab.value = 'single'
   await nextTick()
   applyModelPreset(experiment.preset)
-  selectedVoice.value = model.profile.voices[0]?.value || 'default'
+  selectedVoice.value = model.profile.voices.find(voice => voice.value === experiment.voice)?.value || model.profile.voices[0]?.value || 'default'
   modelOptions.value = { ...modelOptions.value, ...experiment.options }
   inputText.value = experiment.text
   speed.value = 1
@@ -754,6 +761,7 @@ function reviewSaved(run:GenerationResult, review:Review) {
 
 async function runBattle() {
   if (isGenerating.value || selectedBattleKeys.value.length === 0 || !hasEvaluationText.value) return
+  if (battleTextError.value) { errorMessage.value = battleTextError.value; return }
   errorMessage.value = ''
   if (needsReference.value && battleReferenceModels.value.length) {
     errorMessage.value = '请重新上传参考音频，或明确恢复默认参考音频。'
@@ -805,7 +813,8 @@ async function resumeComparison() {
 
 // 运行单个模型生成
 async function runSingle() {
-  if (!currentModelKey.value || !inputText.value || !currentModel.value?.is_ready) return
+  if (isGenerating.value || !currentModelKey.value || !inputText.value.trim() || !currentModel.value?.is_ready) return
+  if (singleTextError.value) { errorMessage.value = singleTextError.value; return }
   errorMessage.value = ''
   singleResult.value = null
   nowPlayingUrl.value = ''

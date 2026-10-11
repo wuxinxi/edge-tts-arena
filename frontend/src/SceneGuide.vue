@@ -27,12 +27,13 @@
         <label class="flex items-center gap-2 text-xs text-slate-400">
           <input v-model="readyOnly" type="checkbox" class="accent-indigo-500" /> 只看本地资源就绪的模型
         </label>
-        <button @click="$emit('compare', { keys: readyCandidates.map(model => model.key), text: selected.text })"
-          :disabled="busy || !readyCandidates.length"
+        <button @click="$emit('compare', { keys: comparableCandidates.map(model => model.key), text: selected.text })"
+          :disabled="busy || !comparableCandidates.length"
           class="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-40 inline-flex items-center gap-2">
-          <ArrowRight :size="14" />前往统一评测（{{ readyCandidates.length }} 款）
+          <ArrowRight :size="14" />前往统一评测（{{ comparableCandidates.length }} 款）
         </button>
       </div>
+      <p v-if="comparableCandidates.length < readyCandidates.length" class="text-xs text-amber-300">Parler 仅支持英文，未加入本场景的中文统一评测；可单独使用英文示例探索。</p>
       <p class="text-[11px] leading-relaxed text-slate-500">统一评测使用相同示例文本和基础配置，比较离线耗时与进程内存。特色指令、克隆模式和目标时长需在能力探索页分别验证。此处只准备设置，点击生成后才运行。</p>
     </div>
 
@@ -82,19 +83,21 @@ import { computed, ref } from 'vue'
 import { Compass, BookOpen, MessageCircle, AudioLines, Languages, SlidersHorizontal, Timer, ExternalLink, ArrowRight, Check, CheckCircle2, AlertCircle, ChevronRight, Info } from 'lucide-vue-next'
 import type { ModelItem } from './types'
 import { scenarios, type ScenarioExperiment } from './scenarios'
+import { textCompatibilityError } from './textCompatibility'
 
 const props = defineProps<{ models: ModelItem[]; busy: boolean }>()
 const emit = defineEmits<{
   (event: 'explore', value: ScenarioExperiment): void
   (event: 'compare', value: { keys: string[]; text: string }): void
 }>()
-const sceneIcons = { reading: BookOpen, dialogue: MessageCircle, clone: AudioLines, languages: Languages, style: SlidersHorizontal, duration: Timer }
+const sceneIcons = { reading: BookOpen, english: Languages, dialogue: MessageCircle, clone: AudioLines, languages: Languages, style: SlidersHorizontal, duration: Timer }
 const selectedKey = ref('reading')
 const readyOnly = ref(true)
 const selected = computed(() => scenarios.find(scene => scene.key === selectedKey.value) || scenarios[0])
 const candidates = computed(() => props.models.filter(model => Object.prototype.hasOwnProperty.call(selected.value.candidates, model.key))
   .slice().sort((a, b) => a.order - b.order))
 const readyCandidates = computed(() => candidates.value.filter(model => model.is_ready))
+const comparableCandidates = computed(() => readyCandidates.value.filter(model => !textCompatibilityError([model.key], [selected.value.text])))
 const visibleModels = computed(() => readyOnly.value ? readyCandidates.value : candidates.value)
 const languages: Record<string, string> = { zh: '中文', en: '英语', ja: '日语', ko: '韩语', de: '德语', fr: '法语',
   ru: '俄语', pt: '葡萄牙语', es: '西班牙语', it: '意大利语', ar: '阿拉伯语', nl: '荷兰语', pl: '波兰语' }
@@ -110,12 +113,13 @@ function controlKinds(model: ModelItem) {
   const prompts = { none: '无风格指令入口', tokens: '专用对话标记', instruction: '自然语言风格指令', description: '英文声音描述' }
   parts.push(prompts[model.profile.prompt_kind])
   if (model.profile.controls.some(control => control.key === 'target_duration')) parts.push('模型目标时长')
-  if (model.profile.voices.length > 1) parts.push(`${model.profile.voices.length} 个本地音色选项`)
+  if (model.key === 'parler-tts-mini') parts.push('6 个命名说话人快捷选项，也可自行描述')
+  else if (model.profile.voices.length > 1) parts.push(`${model.profile.voices.length} 个本地音色选项`)
   return parts.join(' · ')
 }
 function explore(model: ModelItem) {
   const requestedPreset = selected.value.modelPresets?.[model.key] || selected.value.preset
   const preset = model.profile.presets.some(item => item.key === requestedPreset) ? requestedPreset! : 'default'
-  emit('explore', { modelKey: model.key, text: selected.value.text, preset, options: selected.value.options || {} })
+  emit('explore', { modelKey: model.key, voice: selected.value.modelVoices?.[model.key], text: selected.value.modelTexts?.[model.key] || selected.value.text, preset, options: selected.value.options || {} })
 }
 </script>

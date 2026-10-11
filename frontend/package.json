@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:statistics": "node scripts/test-statistics.mjs",
     "test:drafts": "node scripts/test-review-drafts.mjs",
-    "test:listening-summary": "node scripts/test-listening-summary.mjs"
+    "test:listening-summary": "node scripts/test-listening-summary.mjs",
+    "test:language": "node scripts/test-text-compatibility.mjs"
   },
   "dependencies": {
     "vue": "^3.4.21",

@@ -1,5 +1,7 @@
 import type { EvaluationSample } from './types'
+import { englishExample } from './textCompatibility'
 export const evaluationSamples: EvaluationSample[] = [
+  { id: 'english', label: '英文提示', text: englishExample, listen_for: '正文是否完整，英文发音与停顿是否清楚；选择适配英文的音色。' },
   { id: 'notice', label: '短提示', text: '欢迎使用语音助手。您的订单预计明天下午三点送达，请留意通知。', listen_for: '时间是否读对，停顿是否清楚，提示是否完整。' },
   { id: 'paragraph', label: '长段落', text: '清晨，城市还没有完全醒来，街角的早餐店已经亮起了灯。有人赶着去上班，也有人慢慢走进公园。我们常常以为生活需要一个很大的改变，其实，一次认真倾听、一句及时的问候，都可能让普通的一天变得不同。请保持自己的节奏，把眼前的小事做好，然后带着期待继续向前。', listen_for: '后半段是否漏读、重复或提前结束，长句节奏是否稳定。' },
   { id: 'numbers', label: '数字与日期', text: '会议安排在2026年10月9日上午9:30。订单编号7082，金额1,234.56元，折扣15%。客服电话400-800-1234。', listen_for: '日期、时间、金额、百分数与电话号码的数字读法是否准确。' },

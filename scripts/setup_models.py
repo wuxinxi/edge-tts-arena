@@ -10,6 +10,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 ENVIRONMENTS = {
     'kokoro': ('3.12', None), 'qwen3': ('3.12', None), 'parler': ('3.12', None),
+    'chattts': ('3.12', None), 'f5tts': ('3.12', None),
     'melotts': ('3.11', 'MeloTTS'), 'cosyvoice3': ('3.11', 'CosyVoice'),
     'fish-speech': ('3.11', 'fish-speech'), 'maskgct': ('3.11', 'Amphion'),
 }
@@ -68,14 +69,18 @@ def prepare_assets(name):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--models', default=','.join(ENVIRONMENTS), help='独立环境名，逗号分隔；qwen3 包含两种版本')
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument('--all', action='store_true', help='准备全部 9 个独立环境，覆盖 10 款模型；不下载主权重')
+    selection.add_argument('--models', help='独立环境名，逗号分隔：' + ','.join(ENVIRONMENTS) + '；qwen3 包含两种版本；省略时与 --all 相同')
     parser.add_argument('--assets', action='store_true', help='仅下载辅助模型与文本资源')
     parser.add_argument('--index-url', help='可选 Python 包下载源')
     args = parser.parse_args()
-    names = args.models.split(',')
+    names = list(ENVIRONMENTS) if args.models is None else list(dict.fromkeys(name.strip() for name in args.models.split(',')))
+    # Validate the complete selection before any installation or resource preparation.
     for name in names:
         if name not in ENVIRONMENTS:
             parser.error('未知环境: ' + name)
+    for name in names:
         if not args.assets:
             prepare_source(name)
             python = python_for(name)

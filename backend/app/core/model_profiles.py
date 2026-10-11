@@ -4,6 +4,7 @@ import math
 from copy import deepcopy
 
 from backend.app.core.config import CHECKPOINTS_DIR
+from backend.app.workers.worker_settings import PARLER_DEFAULT_DESCRIPTION
 
 
 def number(key, label, default, minimum, maximum, step=1, help=''):
@@ -90,9 +91,13 @@ PROFILES = {
                   number('cfg', '参考引导强度', 2.5, 1, 4, 0.1)],
         presets=[preset('default', '均衡 · 25 步'), preset('fast', '快速 · 16 步', {'n_timesteps': 16}),
                  preset('fine', '精细 · 50 步', {'n_timesteps': 50})]),
-    'parler-tts-mini': dict(version='Parler-TTS Mini v1', purpose='英文描述式生成（缺少权重）', speed_kind='postprocess',
-        prompt_kind='description', tips='当前缺少主权重，暂不运行或下载。', controls=[],
-        presets=[preset('default', '清晰英文')]),
+    'parler-tts-mini': dict(version='Parler-TTS Mini v1', purpose='英文声音描述与命名说话人', speed_kind='postprocess',
+        prompt_kind='description', tips='仅支持英文正文；用英文描述音高、语速与录音感。当前提供官方示例中的 6 个命名说话人；选定后会在描述前附上名字。不是参考声音克隆，音色一致性和描述效果仍需试听。',
+        controls=[SEED],
+        presets=[preset('default', '清晰英文', prompt=PARLER_DEFAULT_DESCRIPTION),
+                 preset('warm', '温暖讲述', prompt='A speaker delivers warm, gentle and expressive speech at a moderate speed, with very clear audio and almost no background noise.'),
+                 preset('news', '平稳播报', prompt='A speaker delivers clear, steady and measured speech at a moderate speed and pitch, with very clear audio and almost no background noise.'),
+                 preset('lively', '活泼表达', prompt='A speaker delivers lively, expressive and animated speech at a slightly fast pace, with very clear audio and almost no background noise.')]),
 }
 
 # 场景标签是根据官方能力与当前接入路径提出的探索方向，不代表场景质量已实测。
@@ -124,8 +129,8 @@ EXPLORATION = {
     'maskgct': dict(scenarios=['声音克隆', '目标时长实验', '不同生成步数对比'],
         listen_for='指定时长下是否漏字或挤字、音色相似度，以及步数对音质与耗时的影响。',
         source_url='https://huggingface.co/amphion/MaskGCT'),
-    'parler-tts-mini': dict(scenarios=['英文朗读', '声音描述实验（待验证）'],
-        listen_for='当前缺少主权重；描述对音色、语速和录音感的影响尚未在本机验证。',
+    'parler-tts-mini': dict(scenarios=['英文朗读', '声音描述', '命名说话人'],
+        listen_for='正文是否完整、声音是否随描述改变，以及命名说话人在不同文本中的一致性。',
         source_url='https://huggingface.co/parler-tts/parler-tts-mini-v1'),
 }
 
@@ -163,6 +168,8 @@ def profile_for(metadata):
     profile.update(deepcopy(EXPLORATION[metadata.key]))
     voices = local_voices(metadata)
     profile['voices'] = [dict(value=v, label=voice_label(v)) for v in voices]
+    if metadata.key == 'parler-tts-mini':
+        profile['voices'] = [dict(value=v, label='按声音描述生成' if v == 'default' else f'{v} · 命名说话人') for v in voices]
     profile['language_note'] = '语言列表表示当前版本能力范围；本机尚未逐语种验证音质。'
     if metadata.key == 'kokoro-82m':
         profile['controls'].insert(0, select('blend_voice', '混合第二音色', '',

@@ -12,7 +12,7 @@
       </button>
     </div>
     <label v-if="model.profile.voices.length > 1" class="block space-y-1.5 text-slate-400">
-      <span>说话人音色</span>
+      <span>{{ model.key === 'parler-tts-mini' ? '命名说话人（加入声音描述）' : '说话人音色' }}</span>
       <select :value="voice" @change="$emit('update:voice', ($event.target as HTMLSelectElement).value)" class="control-input">
         <option v-for="item in model.profile.voices" :key="item.value" :value="item.value">{{ item.label }}</option>
       </select>

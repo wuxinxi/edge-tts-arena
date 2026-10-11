@@ -1,4 +1,4 @@
-"""使用已有本地资源，串行验证配音预设；不会安装或下载资源。"""
+"""使用已有本地资源，串行验证模型专属预设；不会安装或下载资源。"""
 
 import json
 import argparse
@@ -23,6 +23,7 @@ CASES = [
     ('qwen3-tts-0.6b', 'timbre', {'language': 'Chinese'}),
     ('fish-speech-1.5', 'default', {}),
     ('maskgct', 'fast', {'target_duration': 5.0}),
+    ('parler-tts-mini', 'warm', {'seed': 123}),
 ]
 
 
@@ -39,7 +40,8 @@ def main():
         print(json.dumps({'model': key, 'state': 'running'}, ensure_ascii=False), flush=True)
         try:
             result = generate_audio(TTSGenerateRequest(model_key=key,
-                text='今天阳光很好，让我们用清晰自然的声音，讲述一个新的故事。',
+                text='The sun is shining today. Let us tell a new story in a clear and natural voice.' if key == 'parler-tts-mini' else '今天阳光很好，让我们用清晰自然的声音，讲述一个新的故事。',
+                voice='Jon' if key == 'parler-tts-mini' else None,
                 preset=preset, options=options))['data']
             audio, rate = sf.read(OUTPUTS_DIR / result['audio_file'])
             if not np.isfinite(audio).all() or np.max(np.abs(audio)) < 0.01:

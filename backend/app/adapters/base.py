@@ -78,6 +78,9 @@ class BaseTTSAdapter(ABC):
         """统一对外调用接口：包含性能计时、保存音频文件、计算指标。"""
         if not text or not text.strip():
             raise ValueError('合成文本不能为空。')
+        if self.metadata.key == 'parler-tts-mini':
+            from backend.app.workers.worker_settings import validate_parler_text
+            validate_parler_text(text)
         if not self.implementation_available:
             raise NotImplementedError(f'{self.metadata.name} 尚未接入真实推理。')
         if not self.is_available():

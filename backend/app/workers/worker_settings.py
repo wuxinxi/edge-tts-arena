@@ -3,6 +3,20 @@
 import re
 import json
 import random
+import unicodedata
+
+
+PARLER_DEFAULT_DESCRIPTION = 'A speaker delivers clear and natural speech at a moderate speed and pitch, with very clear audio and almost no background noise.'
+
+
+def validate_parler_text(text):
+    if any(character.isalpha() and 'LATIN' not in unicodedata.name(character, '') for character in text):
+        raise ValueError('Parler-TTS Mini v1 仅支持英文，请选择英文文本；不会自动翻译正文。')
+
+
+def parler_description(prompt, voice='default'):
+    description = prompt.strip() if prompt and prompt.strip() else PARLER_DEFAULT_DESCRIPTION
+    return description if voice == 'default' else f"{voice}'s voice. {description}"
 
 
 def load_options(value):
