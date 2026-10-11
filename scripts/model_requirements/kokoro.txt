@@ -1,0 +1,7 @@
+kokoro==0.9.4
+misaki[zh,ja]==0.9.4
+transformers==4.57.3
+torch==2.8.0
+numpy<2
+soundfile
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

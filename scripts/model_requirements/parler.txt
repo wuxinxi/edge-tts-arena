@@ -1,0 +1,5 @@
+parler-tts==0.2.3
+torch==2.8.0
+torchaudio==2.8.0
+numpy<2
+soundfile

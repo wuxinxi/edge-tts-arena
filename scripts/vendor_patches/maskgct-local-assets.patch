@@ -1,0 +1,55 @@
+--- a/models/tts/maskgct/maskgct_utils.py
++++ b/models/tts/maskgct/maskgct_utils.py
+@@ -3,6 +3,7 @@
+ # This source code is licensed under the MIT license found in the
+ # LICENSE file in the root directory of this source tree.
+ 
++import os
+ import torch
+ import torch.nn as nn
+ import torch.nn.functional as F
+@@ -44,7 +45,7 @@
+ 
+ 
+ def build_semantic_model(device):
+-    semantic_model = Wav2Vec2BertModel.from_pretrained("facebook/w2v-bert-2.0")
++    semantic_model = Wav2Vec2BertModel.from_pretrained(os.environ.get("MASKGCT_SEMANTIC_DIR", "facebook/w2v-bert-2.0"))
+     semantic_model.eval()
+     semantic_model.to(device)
+     stat_mean_var = torch.load("./models/tts/maskgct/ckpt/wav2vec2bert_stats.pt")
+@@ -87,7 +88,7 @@
+         device,
+     ):
+         self.processor = SeamlessM4TFeatureExtractor.from_pretrained(
+-            "facebook/w2v-bert-2.0"
++            os.environ.get("MASKGCT_SEMANTIC_DIR", "facebook/w2v-bert-2.0")
+         )
+         self.semantic_model = semantic_model
+         self.semantic_codec = semantic_codec
+--- a/models/tts/maskgct/g2p/g2p/__init__.py
++++ b/models/tts/maskgct/g2p/g2p/__init__.py
+@@ -6,7 +6,6 @@
+ from models.tts.maskgct.g2p.g2p import cleaners
+ from tokenizers import Tokenizer
+ from models.tts.maskgct.g2p.g2p.text_tokenizers import TextTokenizer
+-import LangSegment
+ import json
+ import re
+ 
+@@ -29,7 +28,6 @@
+             json_data = f.read()
+         data = json.loads(json_data)
+         self.vocab = data["vocab"]
+-        LangSegment.setfilters(["en", "zh", "ja", "ko", "fr", "de"])
+ 
+     def int_text_tokenizers(self):
+         for key, value in self.lang2backend.items():
+@@ -40,6 +38,8 @@
+         # 1. convert text to phoneme
+         phonemes = []
+         if language == "auto":
++            import LangSegment
++            LangSegment.setfilters(["en", "zh", "ja", "ko", "fr", "de"])
+             seglist = LangSegment.getTexts(text)
+             tmp_ph = []
+             for seg in seglist:

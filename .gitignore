@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.venvs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+/build/
+/dist/
+
+# 前端依赖与构建产物（保留 pnpm-lock.yaml）
+node_modules/
+/frontend/dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# 本地配置（保留可提交的配置示例）
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+
+# 系统文件
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# 模型权重、外部源码与本地评测产物
+/checkpoints/
+/pretrained_models/
+/third_party/
+/output_audio/
+/outputs/
+/scratch/
+*.wav
+!backend/assets/reference/default.wav
+*.mp3
+
+# 日志与临时文件
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/

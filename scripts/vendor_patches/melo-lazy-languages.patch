@@ -1,0 +1,92 @@
+diff --git a/melo/text/__init__.py b/melo/text/__init__.py
+index 6e482be..8eaa0b0 100644
+--- a/melo/text/__init__.py
++++ b/melo/text/__init__.py
+@@ -21,15 +21,9 @@ def cleaned_text_to_sequence(cleaned_text, tones, language, symbol_to_id=None):
+ 
+ 
+ def get_bert(norm_text, word2ph, language, device):
+-    from .chinese_bert import get_bert_feature as zh_bert
+-    from .english_bert import get_bert_feature as en_bert
+-    from .japanese_bert import get_bert_feature as jp_bert
+-    from .chinese_mix import get_bert_feature as zh_mix_en_bert
+-    from .spanish_bert import get_bert_feature as sp_bert
+-    from .french_bert import get_bert_feature as fr_bert
+-    from .korean import get_bert_feature as kr_bert
+-
+-    lang_bert_func_map = {"ZH": zh_bert, "EN": en_bert, "JP": jp_bert, 'ZH_MIX_EN': zh_mix_en_bert, 
+-                          'FR': fr_bert, 'SP': sp_bert, 'ES': sp_bert, "KR": kr_bert}
+-    bert = lang_bert_func_map[language](norm_text, word2ph, device)
+-    return bert
++    from importlib import import_module
++    modules = {"ZH": "chinese_bert", "EN": "english_bert", "JP": "japanese_bert",
++               "ZH_MIX_EN": "chinese_mix", "FR": "french_bert", "SP": "spanish_bert",
++               "ES": "spanish_bert", "KR": "korean"}
++    module = import_module("." + modules[language], __package__)
++    return module.get_bert_feature(norm_text, word2ph, device)
+diff --git a/melo/text/chinese_bert.py b/melo/text/chinese_bert.py
+index ae454c4..87090e0 100644
+--- a/melo/text/chinese_bert.py
++++ b/melo/text/chinese_bert.py
+@@ -19,12 +19,6 @@ def get_bert_feature(text, word2ph, device=None, model_id='hfl/chinese-roberta-w
+     model = models[model_id]
+     tokenizer = tokenizers[model_id]
+ 
+-    if (
+-        sys.platform == "darwin"
+-        and torch.backends.mps.is_available()
+-        and device == "cpu"
+-    ):
+-        device = "mps"
+     if not device:
+         device = "cuda"
+ 
+diff --git a/melo/text/cleaner.py b/melo/text/cleaner.py
+index fdf2609..2154c7d 100644
+--- a/melo/text/cleaner.py
++++ b/melo/text/cleaner.py
+@@ -1,20 +1,20 @@
+-from . import chinese, japanese, english, chinese_mix, korean, french, spanish
++from importlib import import_module
+ from . import cleaned_text_to_sequence
+ import copy
+ 
+-language_module_map = {"ZH": chinese, "JP": japanese, "EN": english, 'ZH_MIX_EN': chinese_mix, 'KR': korean,
+-                    'FR': french, 'SP': spanish, 'ES': spanish}
++language_module_map = {"ZH": "chinese", "JP": "japanese", "EN": "english", "ZH_MIX_EN": "chinese_mix",
++                       "KR": "korean", "FR": "french", "SP": "spanish", "ES": "spanish"}
+ 
+ 
+ def clean_text(text, language):
+-    language_module = language_module_map[language]
++    language_module = import_module("." + language_module_map[language], __package__)
+     norm_text = language_module.text_normalize(text)
+     phones, tones, word2ph = language_module.g2p(norm_text)
+     return norm_text, phones, tones, word2ph
+ 
+ 
+ def clean_text_bert(text, language, device=None):
+-    language_module = language_module_map[language]
++    language_module = import_module("." + language_module_map[language], __package__)
+     norm_text = language_module.text_normalize(text)
+     phones, tones, word2ph = language_module.g2p(norm_text)
+     
+diff --git a/melo/text/english.py b/melo/text/english.py
+index d1152fe..7b6bfe7 100644
+--- a/melo/text/english.py
++++ b/melo/text/english.py
+@@ -8,7 +8,13 @@ from . import symbols
+ from .english_utils.abbreviations import expand_abbreviations
+ from .english_utils.time_norm import expand_time_english
+ from .english_utils.number_norm import normalize_numbers
+-from .japanese import distribute_phone
++# Same distribution helper as japanese.py; Chinese/English inference does not need Japanese models.
++def distribute_phone(n_phone, n_word):
++    phones_per_word = [0] * n_word
++    for _ in range(n_phone):
++        index = phones_per_word.index(min(phones_per_word))
++        phones_per_word[index] += 1
++    return phones_per_word
+ 
+ from transformers import AutoTokenizer
+ 

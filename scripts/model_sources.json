@@ -1,0 +1,18 @@
+{
+  "MeloTTS": {
+    "url": "https://github.com/myshell-ai/MeloTTS.git",
+    "revision": "209145371cff8fc3bd60d7be902ea69cbdb7965a"
+  },
+  "CosyVoice": {
+    "url": "https://github.com/FunAudioLLM/CosyVoice.git",
+    "revision": "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"
+  },
+  "fish-speech": {
+    "url": "https://github.com/fishaudio/fish-speech.git",
+    "revision": "58046eaa1a4cefb0c8cc3a3a667b34186ea02dde"
+  },
+  "Amphion": {
+    "url": "https://github.com/open-mmlab/Amphion.git",
+    "revision": "26f6883110181f1dbfe95c70a7c7dbaf4de5f42a"
+  }
+}
