@@ -32,10 +32,10 @@
           </div>
 
           <!-- 统一内存 -->
-          <div class="flex items-center gap-2 bg-slate-800/60 border border-slate-700/50 px-3 py-1.5 rounded-lg">
+          <div class="flex items-center gap-2 bg-slate-800/60 border border-slate-700/50 px-3 py-1.5 rounded-lg" title="系统内存占用按总内存减去可用内存计算，数字与进度条使用同一口径。">
             <MemoryStick :size="14" class="text-slate-500" /><span class="text-slate-400">系统内存</span>
             <span class="font-mono text-slate-200">
-              {{ hardware?.used_memory_gb || '--' }}G / {{ hardware?.total_memory_gb || '--' }}G
+              {{ hardware?.used_memory_gb ?? '--' }}G / {{ hardware?.total_memory_gb ?? '--' }}G
             </span>
             <div class="w-12 h-1.5 bg-slate-700 rounded-full overflow-hidden ml-1">
               <div
@@ -130,18 +130,19 @@
               v-for="m in models"
               :key="m.key"
               @click="toggleBattleKey(m.key)"
-              :aria-pressed="selectedBattleKeys.includes(m.key)" :disabled="isGenerating || !m.is_ready"
+              :aria-pressed="selectedBattleKeys.includes(m.key)" :disabled="isGenerating || !m.is_ready || !!battleModelTextError(m.key)"
               class="p-2.5 rounded-xl border transition cursor-pointer text-left select-none relative group disabled:opacity-50"
               :class="selectedBattleKeys.includes(m.key) ? 'bg-indigo-950/40 border-indigo-500/60 shadow-sm' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'"
             >
               <div class="flex items-center justify-between mb-1">
                 <span class="font-mono text-xs font-bold text-indigo-300">{{ m.param_size }}</span>
-                <span class="w-2 h-2 rounded-full" :class="m.is_ready ? 'bg-emerald-400' : 'bg-slate-600'" :title="m.unavailable_reason || '可运行'"></span>
+                <span class="w-2 h-2 rounded-full" :class="!m.is_ready ? 'bg-slate-600' : battleModelTextError(m.key) ? 'bg-amber-400' : 'bg-emerald-400'" :title="m.unavailable_reason || battleModelTextError(m.key) || '可运行'"></span>
               </div>
               <div class="font-medium text-xs text-slate-200 truncate">{{ m.name }}</div>
-              <div class="text-[10px] text-slate-400 truncate" :title="m.unavailable_reason || m.category">{{ m.is_ready ? m.category : m.unavailable_reason }}</div>
+              <div class="text-[10px] truncate" :class="battleModelTextError(m.key) ? 'text-amber-300' : 'text-slate-400'" :title="m.unavailable_reason || battleModelTextError(m.key) || m.category">{{ !m.is_ready ? m.unavailable_reason : battleModelTextError(m.key) ? '仅支持英文 · 当前不可选' : m.category }}</div>
             </button>
           </div>
+          <p v-if="incompatibleBattleModels.length" role="status" class="flex items-start gap-2 text-xs leading-relaxed text-amber-300"><Info :size="14" class="mt-0.5 shrink-0" /><span>{{ incompatibleBattleModels.map(model => model.name).join('、') }} 仅支持英文，当前文本不兼容，已从评测中排除。使用英文文本后可重新勾选。</span></p>
         </div>
 
           <div class="flex flex-wrap items-center justify-between gap-3">
@@ -419,7 +420,7 @@ import EvaluationPlan from './EvaluationPlan.vue'
 import ComparisonHistory from './ComparisonHistory.vue'
 import RunHistory from './RunHistory.vue'
 import { evaluationSamples } from './evaluationSamples'
-import { englishExample, textCompatibilityError } from './textCompatibility'
+import { englishExample, textCompatibilityError, compatibleModelKeys } from './textCompatibility'
 import BatchProgress from './BatchProgress.vue'
 import ListeningReview from './ListeningReview.vue'
 import { reviewDrafts, pendingReviewDrafts, warnBeforeLeaving } from './listeningReviewDrafts'
@@ -499,8 +500,19 @@ const globalAudio = ref<HTMLAudioElement | null>(null)
 
 const currentModel = computed(() => models.value.find(m => m.key === currentModelKey.value))
 const singleTextError = computed(() => textCompatibilityError([currentModelKey.value], [inputText.value]))
-const battleTextError = computed(() => textCompatibilityError(selectedBattleKeys.value,
-  evaluationTextMode.value === 'suite' ? plannedSamples.value.map(sample => sample.text) : [inputText.value]))
+const battleTexts = computed(() => evaluationTextMode.value === 'suite'
+  ? plannedSamples.value.map(sample => sample.text) : [inputText.value])
+function battleModelTextError(key: string): string {
+  return textCompatibilityError([key], battleTexts.value)
+}
+const battleTextError = computed(() => textCompatibilityError(selectedBattleKeys.value, battleTexts.value))
+const incompatibleBattleModels = computed(() => models.value.filter(model =>
+  model.is_ready && !!battleModelTextError(model.key)))
+watch([battleTexts, selectedBattleKeys, isGenerating], () => {
+  if (isGenerating.value) return
+  const compatible = compatibleModelKeys(selectedBattleKeys.value, battleTexts.value)
+  if (compatible.length !== selectedBattleKeys.value.length) selectedBattleKeys.value = compatible
+}, { deep: true, immediate: true })
 const battleReferenceModels = computed(() => models.value.filter(model =>
   selectedBattleKeys.value.includes(model.key) && model.requires_reference_audio))
 const requiresRefText = computed(() => !modelOptions.value.x_vector_only && modelOptions.value.mode !== 'cross_lingual')
@@ -613,6 +625,7 @@ function applyPreset(text: string) {
 function toggleBattleKey(key: string) {
   if (isGenerating.value) return
   if (!models.value.find(model => model.key === key)?.is_ready) return
+  if (battleModelTextError(key)) return
   const idx = selectedBattleKeys.value.indexOf(key)
   if (idx > -1) {
     selectedBattleKeys.value.splice(idx, 1)
@@ -624,7 +637,7 @@ function toggleBattleKey(key: string) {
 function selectAllBattle(select: boolean) {
   if (isGenerating.value) return
   if (select) {
-    selectedBattleKeys.value = models.value.filter(m => m.is_ready).map(m => m.key)
+    selectedBattleKeys.value = compatibleModelKeys(models.value.filter(m => m.is_ready).map(m => m.key), battleTexts.value)
   } else {
     selectedBattleKeys.value = []
   }
@@ -656,7 +669,7 @@ async function fetchData() {
     if (modelsData.success) {
       models.value = modelsData.data
       const ready = models.value.filter(model => model.is_ready)
-      selectedBattleKeys.value = ready.map(model => model.key)
+      selectedBattleKeys.value = compatibleModelKeys(ready.map(model => model.key), battleTexts.value)
       currentModelKey.value = ready[0]?.key || models.value[0]?.key || ''
     }
   } catch (e) {

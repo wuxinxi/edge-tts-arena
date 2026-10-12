@@ -1,13 +1,19 @@
 <template>
-  <section class="rounded-xl border border-teal-500/20 bg-teal-500/[.03] p-4 space-y-4">
-    <div class="flex flex-wrap justify-between items-center gap-2"><h3 class="section-title text-sm"><ClipboardCheck :size="17" /> 内容与听感记录</h3><span class="text-[11px] text-teal-300">人工试听 · 不计入性能排名</span></div>
-    <p class="chart-caption">记录对应某一次真实音频，不是自动评分。可以保留问题片段与适用场景，便于以后回看。</p>
-    <label class="flex flex-wrap items-center gap-2 text-xs text-slate-400">记录哪次音频
+  <section class="rounded-xl border border-slate-800 bg-slate-950/20 p-3">
+    <button @click="expanded = !expanded" :aria-expanded="expanded" aria-label="展开或收起听感记录" class="flex w-full flex-wrap items-center gap-2 text-left">
+      <ClipboardCheck :size="15" class="text-slate-400" /><span class="text-xs font-medium text-slate-300">听感记录<span class="ml-1 font-normal text-slate-500">（可选）</span></span>
+      <span v-if="selectedRun" class="min-w-0 truncate text-[11px] text-slate-500">{{ selectedRun.model_name }} · 第 {{ selectedRun.repeat_index || 1 }} 次</span>
+      <span class="ml-auto text-[11px]" :class="state?.dirty ? 'text-amber-300' : 'text-slate-500'">{{ state?.dirty ? '有未保存草稿' : state?.value.updated_at ? '已记录' : '未记录' }}</span>
+      <ChevronRight :size="13" class="text-slate-500 transition" :class="expanded ? 'rotate-90' : ''" />
+    </button>
+    <div v-show="expanded" class="mt-4 space-y-4">
+    <p class="chart-caption">人工记录对应这一次音频，不计入性能排名。</p>
+    <label v-if="eligible.length > 1" class="flex flex-wrap items-center gap-2 text-xs text-slate-400">记录音频
       <select v-model="selectedKey" aria-label="试听记录音频" class="control-input !w-auto max-w-full"><option v-for="run in eligible" :key="run.audio_file" :value="run.audio_file">{{ run.model_name }} · {{ run.sample_label || '当前文本' }} · 第 {{ run.repeat_index || 1 }} 次</option></select>
     </label>
     <p v-if="!selectedRun" class="chart-caption">等待成功生成的音频</p>
     <template v-else>
-      <p class="rounded-lg bg-slate-900/50 p-3 text-xs leading-relaxed text-slate-400">{{ selectedRun.text }}</p>
+      <details class="group text-xs text-slate-400"><summary class="flex items-center gap-1 cursor-pointer"><ChevronRight :size="12" class="group-open:rotate-90" />查看正文</summary><p class="mt-2 leading-relaxed">{{ selectedRun.text }}</p></details>
       <p v-if="state?.loading" class="chart-caption" role="status">正在读取试听记录…</p>
       <p v-if="state?.error" class="text-xs text-amber-300" role="alert">{{ state.error }} <button v-if="!state.loaded" @click="load(selectedRun)" class="text-indigo-300 underline">重新读取</button></p>
       <fieldset v-if="state" :disabled="!state.loaded || state.saving" class="space-y-4 disabled:opacity-50" @change="state.dirty = true">
@@ -24,24 +30,31 @@
         <button @click="save" :disabled="!state?.loaded || state.saving || !state.dirty" class="inline-flex items-center gap-2 rounded-lg bg-teal-500/10 border border-teal-500/30 px-3 py-2 text-xs text-teal-200 disabled:opacity-40"><Loader2 v-if="state?.saving" :size="14" class="animate-spin" /><Save v-else :size="14" /> 保存试听记录</button>
       </div>
     </template>
+    </div>
   </section>
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ClipboardCheck, Loader2, Save } from 'lucide-vue-next'
+import { ClipboardCheck, Loader2, Save, ChevronRight } from 'lucide-vue-next'
 import type { GenerationResult, ListeningReview as Review } from './types'
 import { reviewDrafts as drafts, emptyReview as empty } from './listeningReviewDrafts'
-const props = defineProps<{runs:GenerationResult[]}>()
+const props = defineProps<{runs:GenerationResult[]; preferredKey?:string}>()
 const emit = defineEmits<{(e:'saved',run:GenerationResult,review:Review):void}>()
 const reviewIssues=[{key:'omission',label:'漏字'},{key:'repetition',label:'重复'},{key:'cutoff',label:'提前结束'},{key:'pronunciation',label:'异常发音'},{key:'noise',label:'杂音'}] as const
 const eligible=computed(() => props.runs.filter(run=>run.success && run.record_url))
 const selectedKey=ref('')
+const expanded=ref(false)
 const selectedRun=computed(() => eligible.value.find(run=>run.audio_file===selectedKey.value))
 const state=computed(() => drafts[selectedKey.value])
 watch(() => eligible.value.map(run=>run.audio_file).join('|'), () => {
-  if (!eligible.value.some(run=>run.audio_file===selectedKey.value)) selectedKey.value=eligible.value[0]?.audio_file || ''
+  if (!eligible.value.some(run=>run.audio_file===selectedKey.value)) selectedKey.value=eligible.value.find(run=>run.audio_file===props.preferredKey)?.audio_file || eligible.value[0]?.audio_file || ''
 }, {immediate:true})
-watch(selectedRun, run => { if (run && !drafts[run.audio_file]) load(run) }, {immediate:true})
+watch(() => props.preferredKey, key => { if (eligible.value.some(run=>run.audio_file===key)) selectedKey.value=key! }, {immediate:true})
+watch(selectedRun, run => {
+  if (run && !drafts[run.audio_file]) load(run)
+  if (run && drafts[run.audio_file]?.dirty) expanded.value=true
+}, {immediate:true})
+watch(() => state.value?.dirty, dirty => { if (dirty) expanded.value=true })
 async function load(run:GenerationResult) {
   const key=run.audio_file
   // 保存被拒绝后重新读取也不能抹掉已经输入的草稿。

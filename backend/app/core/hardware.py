@@ -58,8 +58,11 @@ def get_hardware_info() -> Dict[str, Any]:
     vm = psutil.virtual_memory()
     total_gb = round(vm.total / (1024 ** 3), 2)
     available_gb = round(vm.available / (1024 ** 3), 2)
-    used_gb = round(vm.used / (1024 ** 3), 2)
-    percent = vm.percent
+    # psutil.used is platform-specific (active + wired on macOS), while
+    # psutil.percent uses total - available. Keep the number and bar consistent.
+    used_bytes = vm.total - vm.available
+    used_gb = round(used_bytes / (1024 ** 3), 2)
+    percent = round(used_bytes / vm.total * 100, 1) if vm.total else 0.0
 
     chip_name = get_apple_chip_name()
     mps_info = check_mps_status()

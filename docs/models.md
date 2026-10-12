@@ -54,12 +54,47 @@ uv python install 3.12
 
 `--all` 准备表中全部环境；为兼容原用法，不带选择参数也执行全部准备。`--all` 与 `--models` 不能同时使用。默认流程会拉取所需源码、安装依赖，并下载需要的辅助资源；它不会替代 `download.sh` 的主权重下载。
 
+单个环境失败后会继续准备其他环境，最后汇总失败项并以非零退出码结束，给出只重试失败环境的命令。「准备完成」表示本次环境与辅助资源步骤完成，主权重和实际生成仍需另行验证；已有权重无需重新下载。
+
 ```bash
 # 环境与源码已经准备好时，只补辅助资源
 ./.venv/bin/python scripts/setup_models.py --models melotts,maskgct --assets
 ```
 
 依赖版本见 [model_requirements](../scripts/model_requirements/)，源码 revision 见 [model_sources.json](../scripts/model_sources.json)。已有源码的 revision 不一致时脚本会报错，先保留本地修改再处理；MeloTTS 和 MaskGCT 的本地兼容补丁位于 [vendor_patches](../scripts/vendor_patches/)。
+
+### NLTK 资源与 TUN / Fake-IP
+
+MeloTTS、MaskGCT 需要 NLTK 的 `cmudict`、`averaged_perceptron_tagger`、`averaged_perceptron_tagger_eng` 语言资源。准备脚本先检查所需本地文件，仅为缺失项调用 NLTK 下载器。`g2p_en` 导入时也会查找前两个资源的 zip，因此复制缓存时应保留压缩包和解压目录。
+
+出现 `Security Violation [pathsec.urlopen]: SSRF attempt to restricted IP 198.18.x.x` 时，NLTK 拒绝了下载域名解析出的非公网地址。启用 Clash / Mihomo 的 TUN / Fake-IP 时，可能返回这种地址；Fake-IP 配置与过滤规则见 [Mihomo 文档](https://wiki.metacubex.one/en/config/dns/#fake-ip-filter)。该错误发生在语言资源准备阶段，主模型文件全部存在也不能替代这些资源。
+
+可在新电脑确认实际 NLTK 版本与 DNS 返回值：
+
+```bash
+./.venvs/melotts/bin/python -c "import socket,nltk; print('NLTK',nltk.__version__); print(sorted({item[4][0] for item in socket.getaddrinfo('raw.githubusercontent.com',443)}))"
+```
+
+若使用 Mihomo 的默认 `fake-ip-filter-mode: blacklist`，将下面域名追加到现有 `dns.fake-ip-filter` 列表，让它返回真实 IP；其他过滤模式需按其规则配置。保留原有其他 DNS 设置：
+
+```yaml
+dns:
+  fake-ip-filter:
+    - raw.githubusercontent.com
+```
+
+应用代理配置后确认 DNS 已返回真实公网 IP，再重新运行 `--all`，或使用脚本汇总中的失败项重试命令。若之前使用旧脚本在 MeloTTS 处中断，CosyVoice、Fish-Speech、MaskGCT 也可能尚未准备，应重新运行 `--all`。
+
+另一种方式是从已成功准备资源的电脑复制完整 `~/nltk_data` 到新电脑的同名目录；不要复制虚拟环境。放在其他位置时，准备和启动服务都要使用相同的 `NLTK_DATA` 路径，例如：
+
+```bash
+# 路径下应直接包含 corpora/ 与 taggers/；环境和 BERT 缓存已就绪时只补语言资源
+NLTK_DATA=/absolute/path/to/nltk_data ./.venvs/melotts/bin/python scripts/setup_nltk.py
+# 启动服务也要指向该目录
+NLTK_DATA=/absolute/path/to/nltk_data ./start.sh
+```
+
+完整本地资源的检查不访问下载网络。缺失资源时仍保留 NLTK 的网络安全检查，不自动修改代理、关闭检查或降级依赖。
 
 ### ChatTTS 与 F5-TTS
 

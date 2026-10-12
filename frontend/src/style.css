@@ -32,6 +32,29 @@
     @apply text-[11px] leading-relaxed text-slate-400;
   }
   .chart-svg { overflow: visible; }
+  .audio-progress {
+    appearance: none;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(to right, #818cf8 var(--audio-progress, 0%), #334155 var(--audio-progress, 0%));
+    cursor: pointer;
+  }
+  .audio-progress::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #a5b4fc;
+  }
+  .audio-progress::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border: 0;
+    border-radius: 999px;
+    background: #a5b4fc;
+  }
+  .audio-progress:disabled { opacity: .55; }
+  .audio-progress:focus-visible { outline: 2px solid #818cf8; outline-offset: 5px; }
 }
 
 /* 霓虹发光与极客毛玻璃 */

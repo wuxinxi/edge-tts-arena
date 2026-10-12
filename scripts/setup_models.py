@@ -58,13 +58,14 @@ def prepare_assets(name):
         snippets.append("from huggingface_hub import snapshot_download; snapshot_download('bert-base-multilingual-uncased', allow_patterns=['config.json','tokenizer_config.json','tokenizer.json','vocab.txt','model.safetensors']); snapshot_download('bert-base-uncased', allow_patterns=['config.json','tokenizer_config.json','tokenizer.json','vocab.txt'])")
     if name == 'maskgct':
         snippets.append("from huggingface_hub import snapshot_download; snapshot_download('facebook/w2v-bert-2.0', local_dir='checkpoints/support/w2v-bert-2.0', allow_patterns=['config.json','preprocessor_config.json','model.safetensors'])")
-    if name in ['melotts', 'maskgct']:
-        snippets.append("import nltk; [nltk.download(name, raise_on_error=True) for name in ['cmudict','averaged_perceptron_tagger','averaged_perceptron_tagger_eng']]")
     environment = os.environ.copy()
     environment['HF_HUB_OFFLINE'] = '0'
     environment.setdefault('HF_HUB_DISABLE_XET', '1')
     for snippet in snippets:
         subprocess.run([str(python_for(name)), '-c', snippet], cwd=ROOT, env=environment, check=True)
+    if name in ['melotts', 'maskgct']:
+        subprocess.run([str(python_for(name)), str(ROOT / 'scripts/setup_nltk.py')],
+                       cwd=ROOT, env=environment, check=True)
 
 
 def main():
@@ -80,18 +81,30 @@ def main():
     for name in names:
         if name not in ENVIRONMENTS:
             parser.error('未知环境: ' + name)
+    failures = []
     for name in names:
-        if not args.assets:
-            prepare_source(name)
-            python = python_for(name)
-            if not python.is_file():
-                command(['uv', 'venv', '--python', ENVIRONMENTS[name][0], python.parents[1]])
-            install = ['uv', 'pip', 'install', '--python', python, '-r', ROOT / f'scripts/model_requirements/{name}.txt']
-            if args.index_url:
-                install.extend(['--index-url', args.index_url])
-            command(install)
-        prepare_assets(name)
-        print(name + ': 准备完成（仍需下载 checkpoints 主权重并进行生成验证）', flush=True)
+        try:
+            if not args.assets:
+                prepare_source(name)
+                python = python_for(name)
+                if not python.is_file():
+                    command(['uv', 'venv', '--python', ENVIRONMENTS[name][0], python.parents[1]])
+                install = ['uv', 'pip', 'install', '--python', python, '-r', ROOT / f'scripts/model_requirements/{name}.txt']
+                if args.index_url:
+                    install.extend(['--index-url', args.index_url])
+                command(install)
+            prepare_assets(name)
+        except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as error:
+            failures.append(name)
+            reason = f'子步骤退出码 {error.returncode}，详情见上方错误' if isinstance(error, subprocess.CalledProcessError) else str(error)
+            print(f'{name}: 准备失败（{reason}）；继续处理其他环境', file=sys.stderr, flush=True)
+            continue
+        print(name + ': 准备完成（主权重与实际生成仍需验证）', flush=True)
+    print(f'环境准备汇总: 完成 {len(names) - len(failures)} / {len(names)}，失败 {len(failures)}', flush=True)
+    if failures:
+        retry = '--assets' if args.assets else ''
+        print(f'修复上方问题后重试: ./.venv/bin/python scripts/setup_models.py --models {",".join(failures)} {retry}'.rstrip(), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

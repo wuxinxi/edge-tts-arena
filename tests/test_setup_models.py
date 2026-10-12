@@ -1,4 +1,5 @@
 import io
+import subprocess
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
@@ -62,6 +63,25 @@ class SetupModelsTests(unittest.TestCase):
                 source.assert_not_called()
                 assets.assert_not_called()
                 command.assert_not_called()
+
+    def test_failed_assets_do_not_prevent_remaining_environments_and_exit_nonzero(self):
+        output = io.StringIO()
+        def assets(name):
+            if name == 'melotts':
+                raise subprocess.CalledProcessError(1, ['python', 'setup_nltk.py'])
+        with patch('sys.argv', ['setup_models.py', '--all']), \
+                patch.object(setup_models, 'prepare_source') as source, \
+                patch.object(setup_models, 'prepare_assets', side_effect=assets), \
+                patch.object(setup_models, 'command'), \
+                patch.object(Path, 'is_file', return_value=True), \
+                redirect_stdout(output), redirect_stderr(output):
+            with self.assertRaises(SystemExit) as error:
+                setup_models.main()
+        self.assertEqual(error.exception.code, 1)
+        self.assertEqual([call.args[0] for call in source.call_args_list], list(setup_models.ENVIRONMENTS))
+        self.assertIn('失败 1', output.getvalue())
+        self.assertIn('--models melotts', output.getvalue())
+        self.assertIn('maskgct: 准备完成', output.getvalue())
 
 
 if __name__ == '__main__':
